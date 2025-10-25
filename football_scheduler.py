@@ -16,16 +16,16 @@ class FootballScheduler:
     Football Scheduler class. Initializes the model and decision variables, and handles modeling logic.
 
     Attributes:
-            N: Number of teams
-            K: Number of rounds
-            I_s: List of top teams
-            scheme: SymetricScheme
-            x: Decision variable x[i,j,k]
-            y: Decision variable y[i,k]
-            w: Decision variable w[i,k]
-            model: SCIP model
-            c: Parameter c for MIN_MAX scheme
-            d: Parameter d for MIN_MAX scheme
+                N: Number of teams
+                K: Number of rounds
+                I_s: List of top teams
+                scheme: SymetricScheme
+                x: Decision variable x[i,j,k]
+                y: Decision variable y[i,k]
+                w: Decision variable w[i,k]
+                model: SCIP model
+                c: Parameter c for MIN_MAX scheme
+                d: Parameter d for MIN_MAX scheme
     """
 
     def __init__(
@@ -41,12 +41,12 @@ class FootballScheduler:
         Initialize the FootballScheduler class.
 
         Args:
-                N (int): Number of teams
-                K (int): Number of rounds
-                I_s (list[int]): List of top teams. Should be a subset of teams {0, 1, ..., N-1}
-                scheme (SymetricScheme): Symmetric scheme to be used
-                c (int, optional): Parameter c for MIN_MAX scheme. Defaults to None.
-                d (int, optional): Parameter d for MIN_MAX scheme. Defaults to None.
+                        N (int): Number of teams
+                        K (int): Number of rounds
+                        I_s (list[int]): List of top teams. Should be a subset of teams {0, 1, ..., N-1}
+                        scheme (SymetricScheme): Symmetric scheme to be used
+                        c (int, optional): Parameter c for MIN_MAX scheme. Defaults to None.
+                        d (int, optional): Parameter d for MIN_MAX scheme. Defaults to None.
         """
         if N % 2 != 0:
             raise ValueError("N must be even")
@@ -85,10 +85,9 @@ class FootballScheduler:
         Define the decision variables
 
         Variables:
-                x[i,j,k] = 1 if team i plays against team j in round k.
-                y[i,k] = 1 if team i has an H-A sequence in the doubleround that start at round k.
-                w[i,k] = 1 if team i has an away break in the double round starting in round k.
-
+                        x[i,j,k] = 1 if team i plays against team j in round k.
+                        y[i,k] = 1 if team i has an H-A sequence in the doubleround that start at round k.
+                        w[i,k] = 1 if team i has an away break in the double round starting in round k.
         """
         for i in range(self.N):
             for j in range(self.N):
@@ -107,10 +106,21 @@ class FootballScheduler:
         Define the model constraints
 
         Constraints:
-                - Double round robin constraints
-                - Compactness constraints
-                - Top-teams constraints
+                        - Double round robin
+                        - Compactness
+                        - Top-teams
+                        - Balance
+                        - Aux Vars
+                        - Symmetric scheme
         """
+        self.__instance_double_round_robin_constraints()
+        self.__instance_compactness_constraints()
+        self.__instance_top_teams_constraints()
+        self.__instance_balance_constraints()
+        self.__instance_aux_var_constraints()
+        self.__instance_symmetric_scheme_constraints()
+
+    def __instance_double_round_robin_constraints(self):
         # Double round robin constraints.
         for i in range(self.N):
             for j in range(self.K):
@@ -137,6 +147,7 @@ class FootballScheduler:
                     name=f"match_second_half_{i}_{j}",
                 )
 
+    def __instance_compactness_constraints(self):
         # Compactness constraints
         for j in range(self.N):
             for k in range(self.K):
@@ -151,6 +162,7 @@ class FootballScheduler:
                     name=f"one_match_per_round_{j}_{k}",
                 )
 
+    def __instance_top_teams_constraints(self):
         # Top-teams constraints
         for i in [x for x in range(self.N) if x not in self.I_s]:
             for k in range(self.K):
@@ -167,6 +179,7 @@ class FootballScheduler:
                         name=f"top_team_cons_{i}_{j}_{k}",
                     )
 
+    def __instance_balance_constraints(self):
         # Balance constraints
         for i in range(self.N):
             # C6 - Each team has bewteen N/2-1 and N/2 H-A sequences in double rounds.
@@ -204,15 +217,42 @@ class FootballScheduler:
                     name=f"c9_{i}_{k}",
                 )
 
+    def __instance_aux_var_constraints(self):
+        # Aux constraints
+        for i in range(self.N):
+            for k in range(1, self.K, 2):
+                # C10 - Teams should not have two consecutive away breaks
+                self.model.addCons(
+                    quicksum(
+                        self.x[i, j, k] + self.x[i, j, k + 1]
+                        for j in range(self.N)
+                        if j != i
+                    )
+                    <= 1 + self.w[i, k],
+                    name=f"AB_{i}_{k}",
+                )
+                # C11 -
+                self.model.addCons(
+                    quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
+                    >= self.w[i, k],
+                    name=f"c11_{i}_{k}",
+                )
+                # C12 -
+                self.model.addCons(
+                    quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
+                    >= self.w[i, k],
+                    name=f"c12_{i}_{k}",
+                )
+
+    def __instance_symmetric_scheme_constraints(self):
+        pass
+
     def __set_objective(self):
         """
         Sets the objective function.
         """
         # O - Minimize the total number ofaway breaks within double rounds across all teams.
         self.model.setObjective(
-            quicksum(
-                (quicksum(self.w[i, k] for k in range(1, self.K, 2)))
-                for i in range(self.N)
-            ),
+            quicksum(self.w[i, k] for k in range(1, self.K, 2) for i in range(self.N)),
             sense="minimize",
         )
