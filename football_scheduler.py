@@ -16,11 +16,9 @@ class FootballScheduler:
     Football Scheduler class. Initializes the model and decision variables, and handles modeling logic.
 
     The model is described at:
-    Durán, Guillermo, et al.
-    “Scheduling the South American Qualifiers to the 2018 FIFA World Cup by Integer Programming.”
-    European Journal of Operational Research, vol. 262, no. 3, 1 Nov. 2017, pp. 1109–1115,
-    reader.elsevier.com/reader/sd/pii/S0377221717303909?token=ABD2EAA5C380716EBE2A40E7E9FD273BCD1E3E77BE2AA19DA677BACEBB6711BA08C8C68F8EF491779EF37FEA0268545F,
-    https://doi.org/10.1016/j.ejor.2017.04.043.
+    G. Durán, E. Mijangos, and M. Frisk,
+    “Scheduling the South American qualifiers to the 2018 FIFA World Cup by integer programming,”
+    European Journal of Operational Research, vol. 262, no. 3, pp. 1035-1048, 2017.
 
     Attributes:
                 N: Number of teams
@@ -78,7 +76,7 @@ class FootballScheduler:
         self.x = {}
         self.y = {}
         self.w = {}
-        self.model = Model("Football Scheduler")
+        self.__model = Model("Football Scheduler")
 
         self.c = c
         self.d = d
@@ -86,6 +84,15 @@ class FootballScheduler:
         self.__instance_vars()
         self.__instance_constraints()
         self.__set_objective()
+
+        self.optimized = False
+
+    def __ensure_status(self, status: str):
+        current_status = self.__model.getStatus()
+        if current_status != status:
+            raise RuntimeError(
+                f"Model is not {status}, current status is {current_status}"
+            )
 
     def __instance_vars(self):
         """
@@ -99,14 +106,14 @@ class FootballScheduler:
         for i in range(self.N):
             for j in range(self.N):
                 for k in range(self.K):
-                    self.x[i, j, k] = self.model.addVar(
+                    self.x[i, j, k] = self.__model.addVar(
                         vtype="B", name=f"x_{i}_{j}_{k}"
                     )
 
         for i in range(self.N):
             for k in range(self.K):
-                self.y[i, k] = self.model.addVar(vtype="B", name=f"y_{i}_{k}")
-                self.w[i, k] = self.model.addVar(vtype="B", name=f"w_{i}_{k}")
+                self.y[i, k] = self.__model.addVar(vtype="B", name=f"y_{i}_{k}")
+                self.w[i, k] = self.__model.addVar(vtype="B", name=f"w_{i}_{k}")
 
     def __instance_constraints(self):
         """
@@ -134,13 +141,13 @@ class FootballScheduler:
                 if i == j:
                     continue
                 # (1) - every team faces every other team once in the first half
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k] + self.x[j, i, k] for k in range(self.N))
                     == 1,
                     name=f"match_first_half_{i}_{j}",
                 )
                 # (2) - every team faces every other team once in the second half
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[j, i, k]
                         for k in range(self.N, self.K, 1)
@@ -149,7 +156,7 @@ class FootballScheduler:
                     name=f"match_second_half_{i}_{j}",
                 )
                 # (3) - exactly one of the two games is played at home while the other one is played away
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k] for k in range(self.K)) == 1,
                     name=f"match_second_half_{i}_{j}",
                 )
@@ -159,7 +166,7 @@ class FootballScheduler:
         for j in range(self.N):
             for k in range(self.K):
                 # (4) - all teams must play one match in each round.
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[j, i, k]
                         for i in range(self.N)
@@ -175,7 +182,7 @@ class FootballScheduler:
             for k in range(self.K):
                 for j in self.I_s:
                     # (5) - No non-top team be required to play against any of the top teams in consecutive matches.
-                    self.model.addCons(
+                    self.__model.addCons(
                         quicksum(
                             self.x[i, j, k]
                             + self.x[j, i, k]
@@ -190,19 +197,19 @@ class FootballScheduler:
         # Balance constraints
         for i in range(self.N):
             # (6) - Each team has bewteen N/2-1 and N/2 H-A sequences in double rounds.
-            self.model.addCons(
+            self.__model.addCons(
                 quicksum(self.y[i, k] for k in range(1, self.K, 2))
                 >= (self.N // 2) - 1,
                 name=f"bound_below_HA_seq_{i}",
             )
-            self.model.addCons(
+            self.__model.addCons(
                 quicksum(self.y[i, k] for k in range(1, self.K, 2)) <= (self.N // 2),
                 name=f"bound_above_HA_seq_{i}",
             )
 
             for k in range(1, self.K, 2):
                 # (7) - Teams should not play consecutive home or away matches in double rounds.
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[i, j, k + 1]
                         for j in range(self.N)
@@ -212,13 +219,13 @@ class FootballScheduler:
                     name=f"HA_{i}_{k}",
                 )
                 # (8) -
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
                     >= self.y[i, k],
                     name=f"c8_{i}_{k}",
                 )
                 # (9) -
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
                     >= self.y[i, k],
                     name=f"c9_{i}_{k}",
@@ -229,7 +236,7 @@ class FootballScheduler:
         for i in range(self.N):
             for k in range(1, self.K, 2):
                 # (10) - Teams should not have two consecutive away breaks
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[i, j, k + 1]
                         for j in range(self.N)
@@ -239,13 +246,13 @@ class FootballScheduler:
                     name=f"AB_{i}_{k}",
                 )
                 # (11) -
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
                     >= self.w[i, k],
                     name=f"c11_{i}_{k}",
                 )
                 # (12) -
-                self.model.addCons(
+                self.__model.addCons(
                     quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
                     >= self.w[i, k],
                     name=f"c12_{i}_{k}",
@@ -259,7 +266,7 @@ class FootballScheduler:
                         continue
                     for k in range(self.N - 1):
                         # (14) - Mirror scheme constraint
-                        self.model.addCons(
+                        self.__model.addCons(
                             self.x[i, j, k] == self.x[j, i, k + self.N - 1],
                             f"mirrored_{i}_{j}_{k}",
                         )
@@ -270,13 +277,13 @@ class FootballScheduler:
                     if i == j:
                         continue
                     # (15) - French scheme constraint 1
-                    self.model.addCons(
+                    self.__model.addCons(
                         self.x[i, j, 0] == self.x[j, i, 2 * self.N - 3],
                         f"french_1_{i}_{j}_{k}",
                     )
                     for k in range(1, self.N - 1):
                         # (15) - French scheme constraint 2
-                        self.model.addCons(
+                        self.__model.addCons(
                             self.x[i, j, k] == self.x[j, i, k + self.N - 2],
                             f"french_2_{i}_{j}_{k}",
                         )
@@ -287,13 +294,13 @@ class FootballScheduler:
                     if i == j:
                         continue
                     # (16) - English scheme constraint 1
-                    self.model.addCons(
+                    self.__model.addCons(
                         self.x[i, j, self.N - 2] == self.x[j, i, self.N - 1],
                         f"english_1_{i}_{j}_{k}",
                     )
                     for k in range(1, self.N - 2):
                         # (16) - English scheme constraint 2
-                        self.model.addCons(
+                        self.__model.addCons(
                             self.x[i, j, k] == self.x[j, i, k + self.N],
                             f"english_2_{i}_{j}_{k}",
                         )
@@ -305,7 +312,7 @@ class FootballScheduler:
                         continue
                     for k in range(self.N - 1):
                         # (17) - Inverted scheme constraint
-                        self.model.addCons(
+                        self.__model.addCons(
                             self.x[i, j, k] == self.x[j, i, 2 * self.N - 1 - k],
                             f"inverted_{i}_{j}_{k}",
                         )
@@ -317,7 +324,7 @@ class FootballScheduler:
                         continue
                     for k in range(1, self.N - 1, 2):
                         # (18) - Back to back scheme constraint
-                        self.model.addCons(
+                        self.__model.addCons(
                             self.x[i, j, k] == self.x[j, i, k + 1],
                             f"back_to_back_{i}_{j}_{k}",
                         )
@@ -329,7 +336,7 @@ class FootballScheduler:
                         continue
                     for k in range(0, self.K - self.c - 1):
                         # (19) - Min max scheme constraint 1
-                        self.model.addCons(
+                        self.__model.addCons(
                             quicksum(
                                 self.x[i, j, q] + self.x[j, i, q]
                                 for q in range(k, k + self.c + 1)
@@ -339,7 +346,7 @@ class FootballScheduler:
                         )
                     for k in range(0, self.K):
                         # (19) - Min max scheme constraint 2
-                        self.model.addCons(
+                        self.__model.addCons(
                             quicksum(
                                 self.x[i, j, q]
                                 for q in range(
@@ -356,11 +363,30 @@ class FootballScheduler:
             pass
 
     def __set_objective(self):
-        """
-        Sets the objective function.
-        """
         # (13) - Minimize the total number ofaway breaks within double rounds across all teams.
-        self.model.setObjective(
+        self.__model.setObjective(
             quicksum(self.w[i, k] for k in range(1, self.K, 2) for i in range(self.N)),
             sense="minimize",
         )
+
+    def optimize(self):
+        self.__model.redirectOutput()
+        self.__model.optimize()
+        self.__ensure_status("optimal")
+        self.optimized = True
+
+    def get_obj_value(self) -> float:
+        self.__ensure_status("optimal")
+        return self.__model.getObjVal
+
+    def get_best_sol(self) -> dict:
+        self.__ensure_status("optimal")
+        return self.__model.getBestSol()
+
+    def write_problem(self, path: str):
+        self.__model.writeProblem(path)
+
+    def write_sol(self, path: str):
+        self.__ensure_status("optimal")
+        sol = self.get_best_sol()
+        self.__model.writeSol(sol, filename=path)
