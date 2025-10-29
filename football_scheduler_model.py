@@ -1,5 +1,7 @@
 from pyscipopt import Model, quicksum
 from enum import Enum
+from typing import List
+import unittest
 
 
 class SymetricScheme(Enum):
@@ -11,9 +13,9 @@ class SymetricScheme(Enum):
     MIN_MAX = 5
 
 
-class FootballScheduler:
+class FootballSchedulerModel:
     """
-    Football Scheduler class. Initializes the model and decision variables, and handles modeling logic.
+    Football Scheduler model class. Initializes the model and decision variables, and handles modeling logic.
 
     The model is described at:
     G. Durán, E. Mijangos, and M. Frisk,
@@ -37,8 +39,8 @@ class FootballScheduler:
         self,
         N: int,
         K: int,
-        I_s: list[int],
         scheme: SymetricScheme,
+        I_s: List[int] = [],
         c: int = 0,
         d: int = 0,
     ):
@@ -48,23 +50,21 @@ class FootballScheduler:
         Args:
                         N (int): Number of teams
                         K (int): Number of rounds
-                        I_s (list[int]): List of top teams. Should be a subset of teams {0, 1, ..., N-1}
                         scheme (SymetricScheme): Symmetric scheme to be used
-                        c (int, optional): Parameter c for MIN_MAX scheme. Defaults to None.
-                        d (int, optional): Parameter d for MIN_MAX scheme. Defaults to None.
+                        I_s (list[int]): List of top teams. Should be a subset of teams {0, 1, ..., N-1}. Defaults to [].
+                        c (int, optional): Parameter c for MIN_MAX scheme. Defaults to 0.
+                        d (int, optional): Parameter d for MIN_MAX scheme. Defaults to 0.
         """
-        if N % 2 != 0:
-            raise ValueError("N must be even")
         if K != 2 * N:
             raise ValueError("K must be equal to 2N")
-        if (max(I_s)) > N:
+        if len(I_s) > 0 and (max(I_s)) > N:
             raise ValueError("I_s must be a subset of teams I")
-        if scheme != SymetricScheme.MIN_MAX and (c is not 0 or d is not 0):
+        if scheme != SymetricScheme.MIN_MAX and (c != 0 or d != 0):
             raise ValueError(
                 "c and d should not be provided for schemes other than MIN_MAX"
             )
         if scheme == SymetricScheme.MIN_MAX and (
-            not (1 <= c <= N) or not (c <= d <= N)
+            not (1 <= c <= N) or not (c <= d <= K)
         ):
             raise ValueError("Invalid values for c and d")
 
@@ -84,8 +84,6 @@ class FootballScheduler:
         self.__instance_vars()
         self.__instance_constraints()
         self.__set_objective()
-
-        self.optimized = False
 
     def __ensure_status(self, status: str):
         current_status = self.__model.getStatus()
@@ -129,7 +127,8 @@ class FootballScheduler:
         """
         self.__instance_double_round_robin_constraints()
         self.__instance_compactness_constraints()
-        self.__instance_top_teams_constraints()
+        if len(self.I_s) > 0:
+            self.__instance_top_teams_constraints()
         self.__instance_balance_constraints()
         self.__instance_aux_var_constraints()
         self.__instance_symmetric_scheme_constraints()
@@ -137,12 +136,14 @@ class FootballScheduler:
     def __instance_double_round_robin_constraints(self):
         # Double round robin constraints.
         for i in range(self.N):
-            for j in range(self.K):
+            for j in range(self.N):
                 if i == j:
                     continue
                 # (1) - every team faces every other team once in the first half
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k] + self.x[j, i, k] for k in range(self.N))
+                    quicksum(
+                        self.x[i, j, k] + self.x[j, i, k] for k in range(self.N - 1)
+                    )
                     == 1,
                     name=f"match_first_half_{i}_{j}",
                 )
@@ -150,26 +151,26 @@ class FootballScheduler:
                 self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[j, i, k]
-                        for k in range(self.N, self.K, 1)
+                        for k in range(self.N - 1, self.K - 1, 1)
                     )
                     == 1,
                     name=f"match_second_half_{i}_{j}",
                 )
                 # (3) - exactly one of the two games is played at home while the other one is played away
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k] for k in range(self.K)) == 1,
+                    quicksum(self.x[i, j, k] for k in range(self.K - 1)) == 1,
                     name=f"match_second_half_{i}_{j}",
                 )
 
     def __instance_compactness_constraints(self):
         # Compactness constraints
         for j in range(self.N):
-            for k in range(self.K):
+            for k in range(self.K - 1):
                 # (4) - all teams must play one match in each round.
                 self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[j, i, k]
-                        for i in range(self.N)
+                        for i in range(self.N - 1)
                         if i != j
                     )
                     == 1,
@@ -207,24 +208,24 @@ class FootballScheduler:
                 name=f"bound_above_HA_seq_{i}",
             )
 
-            for k in range(1, self.K, 2):
+            for k in range(1, self.K - 1, 2):
                 # (7) - Teams should not play consecutive home or away matches in double rounds.
                 self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[i, j, k + 1]
-                        for j in range(self.N)
+                        for j in range(self.N - 1)
                         if j != i
                     )
                     <= 1 + self.y[i, k],
                     name=f"HA_{i}_{k}",
                 )
-                # (8) -
+                # (8) - No more H-A sequences than played games in round k
                 self.__model.addCons(
                     quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
                     >= self.y[i, k],
                     name=f"c8_{i}_{k}",
                 )
-                # (9) -
+                # (9) - No more H-A sequences than played games in round k + 1
                 self.__model.addCons(
                     quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
                     >= self.y[i, k],
@@ -234,26 +235,26 @@ class FootballScheduler:
     def __instance_aux_var_constraints(self):
         # Aux constraints
         for i in range(self.N):
-            for k in range(1, self.K, 2):
+            for k in range(1, self.K - 1, 2):
                 # (10) - Teams should not have two consecutive away breaks
                 self.__model.addCons(
                     quicksum(
                         self.x[i, j, k] + self.x[i, j, k + 1]
-                        for j in range(self.N)
+                        for j in range(self.N - 1)
                         if j != i
                     )
                     <= 1 + self.w[i, k],
                     name=f"AB_{i}_{k}",
                 )
-                # (11) -
+                # (11) - No more away breaks sequences than played games in round k
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
+                    quicksum(self.x[i, j, k] for j in range(self.N - 1) if j != i)
                     >= self.w[i, k],
                     name=f"c11_{i}_{k}",
                 )
-                # (12) -
+                # (12) - No more away breaks sequences than played games in round k + 1
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
+                    quicksum(self.x[i, j, k + 1] for j in range(self.N - 1) if j != i)
                     >= self.w[i, k],
                     name=f"c12_{i}_{k}",
                 )
@@ -267,7 +268,7 @@ class FootballScheduler:
                     for k in range(self.N - 1):
                         # (14) - Mirror scheme constraint
                         self.__model.addCons(
-                            self.x[i, j, k] == self.x[j, i, k + self.N - 1],
+                            self.x[i, j, k] == self.x[j, i, k + self.N - 2],
                             f"mirrored_{i}_{j}_{k}",
                         )
 
@@ -279,7 +280,7 @@ class FootballScheduler:
                     # (15) - French scheme constraint 1
                     self.__model.addCons(
                         self.x[i, j, 0] == self.x[j, i, 2 * self.N - 3],
-                        f"french_1_{i}_{j}_{k}",
+                        f"french_1_{i}_{j}",
                     )
                     for k in range(1, self.N - 1):
                         # (15) - French scheme constraint 2
@@ -296,7 +297,7 @@ class FootballScheduler:
                     # (16) - English scheme constraint 1
                     self.__model.addCons(
                         self.x[i, j, self.N - 2] == self.x[j, i, self.N - 1],
-                        f"english_1_{i}_{j}_{k}",
+                        f"english_1_{i}_{j}",
                     )
                     for k in range(1, self.N - 2):
                         # (16) - English scheme constraint 2
@@ -373,7 +374,6 @@ class FootballScheduler:
         self.__model.redirectOutput()
         self.__model.optimize()
         self.__ensure_status("optimal")
-        self.optimized = True
 
     def get_obj_value(self) -> float:
         self.__ensure_status("optimal")
@@ -390,3 +390,28 @@ class FootballScheduler:
         self.__ensure_status("optimal")
         sol = self.get_best_sol()
         self.__model.writeSol(sol, filename=path)
+
+
+class TestFootballSchedulerModel(unittest.TestCase):
+
+    def test_instance_mirrored(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.MIRRORED)
+
+    def test_instance_french(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH)
+
+    def test_instance_english(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.ENGLISH)
+
+    def test_instance_inverted(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.INVERTED)
+
+    def test_instance_back_to_back(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.BACK_TO_BACK)
+
+    def test_instance_min_max(self):
+        _ = FootballSchedulerModel(9, 18, SymetricScheme.MIN_MAX, c=6, d=12)
+
+
+if __name__ == "__main__":
+    unittest.main()
