@@ -383,6 +383,10 @@ class FootballSchedulerModel:
         self.__ensure_status("optimal")
         return self.__model.getBestSol()
 
+    def get_solving_time(self) -> float:
+        self.__ensure_status("optimal")
+        return self.__model.getSolvingTime()
+
     def write_problem(self, path: str):
         self.__model.writeProblem(path)
 
