@@ -196,17 +196,16 @@ class FootballSchedulerModel:
         for i in range(self.N):
             # (6) - Each team has bewteen N/2-1 and N/2 H-A sequences in double rounds.
             self.__model.addCons(
-                quicksum(self.y[i, k] for k in range(1, self.K - 1, 2))
+                quicksum(self.y[i, k] for k in range(0, self.K, 2))
                 >= (self.N // 2) - 1,
                 name=f"bound_below_HA_seq_{i}",
             )
             self.__model.addCons(
-                quicksum(self.y[i, k] for k in range(1, self.K - 1, 2))
-                <= (self.N // 2),
+                quicksum(self.y[i, k] for k in range(0, self.K, 2)) <= (self.N // 2),
                 name=f"bound_above_HA_seq_{i}",
             )
 
-            for k in range(1, self.K - 1, 2):
+            for k in range(0, self.K, 2):
                 # (7) - Teams should not play consecutive home or away matches in double rounds.
                 self.__model.addCons(
                     quicksum(
@@ -233,7 +232,7 @@ class FootballSchedulerModel:
     def __instance_aux_var_constraints(self):
         # Aux constraints
         for i in range(self.N):
-            for k in range(1, self.K - 1, 2):
+            for k in range(0, self.K, 2):
                 # (10) - Teams should not have two consecutive away breaks
                 self.__model.addCons(
                     quicksum(
@@ -364,9 +363,7 @@ class FootballSchedulerModel:
     def __set_objective(self):
         # (13) - Minimize the total number ofaway breaks within double rounds across all teams.
         self.__model.setObjective(
-            quicksum(
-                self.w[i, k] for k in range(1, self.K - 1, 2) for i in range(self.N)
-            ),
+            quicksum(self.w[i, k] for k in range(0, self.K, 2) for i in range(self.N)),
             sense="minimize",
         )
 
@@ -408,7 +405,7 @@ class TestFootballSchedulerModel(unittest.TestCase):
         _ = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH)
 
     def test_french_is_feasible(self):
-        model = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH)
+        model = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH, [1, 2])
         model.optimize()
 
     def test_instance_english(self):
