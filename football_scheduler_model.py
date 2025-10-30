@@ -210,7 +210,7 @@ class FootballSchedulerModel:
                 # (7) - Teams should not play consecutive home or away matches in double rounds.
                 self.__model.addCons(
                     quicksum(
-                        self.x[i, j, k] + self.x[i, j, k + 1]
+                        self.x[i, j, k] + self.x[j, i, k + 1]
                         for j in range(self.N)
                         if j != i
                     )
@@ -225,7 +225,7 @@ class FootballSchedulerModel:
                 )
                 # (9) - No more H-A sequences than played games in round k + 1
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
+                    quicksum(self.x[j, i, k + 1] for j in range(self.N) if j != i)
                     >= self.y[i, k],
                     name=f"c9_{i}_{k}",
                 )
@@ -237,7 +237,7 @@ class FootballSchedulerModel:
                 # (10) - Teams should not have two consecutive away breaks
                 self.__model.addCons(
                     quicksum(
-                        self.x[i, j, k] + self.x[i, j, k + 1]
+                        self.x[j, i, k] + self.x[j, i, k + 1]
                         for j in range(self.N)
                         if j != i
                     )
@@ -246,13 +246,13 @@ class FootballSchedulerModel:
                 )
                 # (11) - No more away breaks sequences than played games in round k
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k] for j in range(self.N) if j != i)
+                    quicksum(self.x[j, i, k] for j in range(self.N) if j != i)
                     >= self.w[i, k],
                     name=f"c11_{i}_{k}",
                 )
                 # (12) - No more away breaks sequences than played games in round k + 1
                 self.__model.addCons(
-                    quicksum(self.x[i, j, k + 1] for j in range(self.N) if j != i)
+                    quicksum(self.x[j, i, k + 1] for j in range(self.N) if j != i)
                     >= self.w[i, k],
                     name=f"c12_{i}_{k}",
                 )
