@@ -141,9 +141,7 @@ class FootballSchedulerModel:
                     continue
                 # (1) - every team faces every other team once in the first half
                 self.__model.addCons(
-                    quicksum(
-                        self.x[i, j, k] + self.x[j, i, k] for k in range(self.N - 1)
-                    )
+                    quicksum(self.x[i, j, k] + self.x[j, i, k] for k in range(self.N))
                     == 1,
                     name=f"match_first_half_{i}_{j}",
                 )
