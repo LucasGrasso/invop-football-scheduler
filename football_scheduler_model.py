@@ -38,7 +38,6 @@ class FootballSchedulerModel:
     def __init__(
         self,
         N: int,
-        K: int,
         scheme: SymetricScheme,
         I_s: List[int] = [],
         c: int = 0,
@@ -49,14 +48,13 @@ class FootballSchedulerModel:
 
         Args:
                         N (int): Number of teams
-                        K (int): Number of rounds
                         scheme (SymetricScheme): Symmetric scheme to be used
                         I_s (list[int]): List of top teams. Should be a subset of teams {0, 1, ..., N-1}. Defaults to [].
                         c (int, optional): Parameter c for MIN_MAX scheme. Defaults to 0.
                         d (int, optional): Parameter d for MIN_MAX scheme. Defaults to 0.
         """
-        if K != 2 * N:
-            raise ValueError("K must be equal to 2N")
+        if N % 2 != 0:
+            raise ValueError("N is not even")
         if len(I_s) > 0 and (max(I_s)) > N:
             raise ValueError("I_s must be a subset of teams I")
         if scheme != SymetricScheme.MIN_MAX and (c != 0 or d != 0):
@@ -64,12 +62,12 @@ class FootballSchedulerModel:
                 "c and d should not be provided for schemes other than MIN_MAX"
             )
         if scheme == SymetricScheme.MIN_MAX and (
-            not (1 <= c <= N) or not (c <= d <= K)
+            not (1 <= c <= N) or not (c <= d <= 2 * (N - 1))
         ):
             raise ValueError("Invalid values for c and d")
 
         self.N = N
-        self.K = K
+        self.K = 2 * (N - 1)
         self.I_s = I_s
         self.scheme = scheme
 
@@ -306,10 +304,10 @@ class FootballSchedulerModel:
                 for j in range(self.N):
                     if i == j:
                         continue
-                    for k in range(self.N - 1):
+                    for k in range(self.N - 2):
                         # (17) - Inverted scheme constraint
                         self.__model.addCons(
-                            self.x[i, j, k] == self.x[j, i, 2 * self.N - 1 - k],
+                            self.x[i, j, k] == self.x[j, i, 2 * (self.N - 1) - k],
                             f"inverted_{i}_{j}_{k}",
                         )
 
@@ -394,29 +392,29 @@ class FootballSchedulerModel:
 class TestFootballSchedulerModel(unittest.TestCase):
 
     def test_instance_mirrored(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.MIRRORED)
+        _ = FootballSchedulerModel(10, SymetricScheme.MIRRORED)
 
     def test_instance_top_teams(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.MIRRORED, [1, 2])
+        _ = FootballSchedulerModel(10, SymetricScheme.MIRRORED, [1, 2])
 
     def test_instance_french(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH)
+        _ = FootballSchedulerModel(10, SymetricScheme.FRENCH)
 
     def test_french_is_feasible(self):
-        model = FootballSchedulerModel(9, 18, SymetricScheme.FRENCH, [1, 2])
+        model = FootballSchedulerModel(10, SymetricScheme.FRENCH, [1, 2])
         model.optimize()
 
     def test_instance_english(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.ENGLISH)
+        _ = FootballSchedulerModel(10, SymetricScheme.ENGLISH)
 
     def test_instance_inverted(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.INVERTED)
+        _ = FootballSchedulerModel(10, SymetricScheme.INVERTED)
 
     def test_instance_back_to_back(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.BACK_TO_BACK)
+        _ = FootballSchedulerModel(10, SymetricScheme.BACK_TO_BACK)
 
     def test_instance_min_max(self):
-        _ = FootballSchedulerModel(9, 18, SymetricScheme.MIN_MAX, c=6, d=12)
+        _ = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, c=6, d=12)
 
 
 if __name__ == "__main__":
