@@ -1,6 +1,7 @@
 from pyscipopt import Model, quicksum
 from enum import Enum
 from typing import List, Dict
+from pyscipopt.scip import Solution, Variable
 import unittest
 
 
@@ -376,6 +377,9 @@ class FootballSchedulerModel:
             sense="minimize",
         )
 
+    def get_vars(self) -> List[Variable]:
+        return self.__model.getVars()
+
     def presolve(self):
         self.__model.presolve()
         if self.__model.getStatus == "infeasible":
@@ -389,9 +393,13 @@ class FootballSchedulerModel:
         self.__ensure_status("optimal")
         return self.__model.getObjVal()
 
-    def get_best_sol(self) -> Dict[str, float]:
+    def get_best_sol(self) -> Solution:
         self.__ensure_status("optimal")
         return self.__model.getBestSol()
+
+    def get_value(self, var: str) -> float:
+        self.__ensure_status("optimal")
+        return self.__model.getVal(var)
 
     def get_solving_time(self) -> float:
         self.__ensure_status("optimal")
