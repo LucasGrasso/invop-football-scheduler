@@ -371,7 +371,7 @@ class FootballSchedulerModel:
             pass
 
     def __set_objective(self):
-        # (13) - Minimize the total number ofaway breaks within double rounds across all teams.
+        # (13) - Minimize the total number of away breaks within double rounds across all teams.
         self.__model.setObjective(
             quicksum(self.w[i, k] for k in range(0, self.K, 2) for i in range(self.N)),
             sense="minimize",
