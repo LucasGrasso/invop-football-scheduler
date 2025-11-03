@@ -82,7 +82,9 @@ class FootballSchedulerModel:
         self.__model.setIntParam("misc/usesymmetry", 0)
 
         if not verbose:
+            self.__model.hideOutput()
             self.__model.setIntParam("display/verblevel", 0)
+            self.__model.setBoolParam("display/lpinfo", False)
             self.__model.setBoolParam("display/relevantstats", False)
             self.__model.redirectOutput()
 
