@@ -137,8 +137,11 @@ class FootballSchedulerModel:
         """
         if self.scheme != SymetricScheme.BACK_TO_BACK:
             self.__instance_double_round_robin_constraints()
+        else:
+            self.__instance_relaxed_double_round_robin_constraints()
         self.__instance_compactness_constraints()
-        if len(self.I_s) > 0:
+        # b2b is uncompatible with top_teams constraints.
+        if len(self.I_s) > 0 and self.scheme != SymetricScheme.BACK_TO_BACK:
             self.__instance_top_teams_constraints()
         self.__instance_balance_constraints()
         self.__instance_aux_var_constraints()
@@ -170,7 +173,19 @@ class FootballSchedulerModel:
                 # (3) - exactly one of the two games is played at home while the other one is played away
                 self.__model.addCons(
                     quicksum(self.x[i, j, k] for k in range(self.K)) == 1,
-                    name=f"not_two_home_half_{i}_{j}",
+                    name=f"not_two_home_{i}_{j}",
+                )
+
+    def __instance_relaxed_double_round_robin_constraints(self):
+        # Relaxe Double round robin constraints for Back-to-back scheme.
+        for i in range(self.N):
+            for j in range(self.N):
+                if i == j:
+                    continue
+                # (3) - exactly one of the two games is played at home while the other one is played away
+                self.__model.addCons(
+                    quicksum(self.x[i, j, k] for k in range(self.K)) == 1,
+                    name=f"r_not_two_home_{i}_{j}",
                 )
 
     def __instance_compactness_constraints(self):
@@ -459,7 +474,7 @@ class TestFootballSchedulerModel(unittest.TestCase):
     def test_instance_min_max(self):
         _ = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, c=5, d=13)
 
-    def test_min_max_persolve_is_feasible(self):
+    def test_min_max_presolve_is_feasible(self):
         model = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, [1, 2], c=5, d=13)
         model.presolve()
 
