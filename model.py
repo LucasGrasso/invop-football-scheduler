@@ -457,10 +457,10 @@ class TestFootballSchedulerModel(unittest.TestCase):
         self.assertEqual(model.get_obj_value(), 0)
 
     def test_instance_min_max(self):
-        _ = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, c=6, d=12)
+        _ = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, c=5, d=13)
 
-    def test_min_max_presolve_is_feasible(self):
-        model = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, [1, 2], c=6, d=12)
+    def test_min_max_persolve_is_feasible(self):
+        model = FootballSchedulerModel(10, SymetricScheme.MIN_MAX, [1, 2], c=5, d=13)
         model.presolve()
 
 
