@@ -22,33 +22,51 @@ def parse_sol(sol_path: str) -> Dict[str, float]:
 
 
 def to_df(
+    n: int,
     sol: Dict[str, float],
-    index_of: Dict[str, int],
-    country_of: Dict[str, str],
 ) -> pd.DataFrame:
     """
             Generates a dataframe representation of the obtained fixture.
 
     Inputs:
+                - n (int): Number of teams.
                 - sol (Dict[str, float]): Obtained via `parse_sol`
-                - index_of (Dict[str, int]): Map from country name to index.
-                - country_of (Dict[int, str]): Map from str(index) to country names.
 
     """
-    countries = index_of.keys()
-    n = len(countries)
     data = dict()
-    data["Team"] = countries
+    data["Team"] = [x for x in range(n)]
     for i in range(2 * (n - 1)):
         data[str(i)] = ["" for _ in range(n)]
     for var, val in sol.items():
         if not var.startswith("x_") or val == 0:
             continue
         _, i, j, k = var.split("_")
-        c_i = country_of[i]
-        c_i_idx = index_of[c_i]
-        c_j = country_of[j]
-        c_j_idx = index_of[c_j]
-        data[k][c_i_idx] = c_j
-        data[k][c_j_idx] = f"@{c_i}"
+        data[k][int(i)] = j
+        data[k][int(j)] = f"@{i}"
     return pd.DataFrame(data)
+
+
+def to_df_mapped(
+    sol: Dict[str, float],
+    country_of: Dict[str, str],
+) -> pd.DataFrame:
+    """
+            Generates a dataframe representation of the obtained fixture including country names.
+
+    Inputs:
+                - sol (Dict[str, float]): Obtained via `parse_sol`
+                - country_of (Dict[str, str]). Maps indexes to countries.
+
+    """
+    df = to_df(len(country_of), sol)
+    # Replace numeric team indices with country names
+    df["Team"] = [country_of[str(i)] for i in df["Team"]]
+    for col in df.columns[1:]:
+        df[col] = df[col].apply(
+            lambda v: (
+                f"@{country_of[v[1:]]}"
+                if isinstance(v, str) and v.startswith("@")
+                else (country_of[v] if v != "" else "")
+            )
+        )
+    return df
