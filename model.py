@@ -360,7 +360,7 @@ class FootballSchedulerModel:
                     if i == j:
                         continue
                     for k in range(0, self.K - self.c):
-                        # (19) - Min max scheme constraint 1
+                        # (19) - Min max scheme constraint 1 -  At least c rounds
                         self.__model.addCons(
                             quicksum(
                                 self.x[i, j, q] + self.x[j, i, q]
@@ -370,13 +370,13 @@ class FootballSchedulerModel:
                             f"min_max_1_{i}_{j}_{k}",
                         )
                     for k in range(0, self.K):
-                        # (19) - Min max scheme constraint 2
+                        # (19) - Min max scheme constraint 2 - At much d rounds
                         self.__model.addCons(
                             quicksum(
                                 self.x[i, j, q]
                                 for q in range(
                                     max(k - self.d, 0),
-                                    min(k + self.d + 1, 2 * (self.N - 1)),
+                                    min(k + self.d, 2 * (self.N - 1)),
                                 )
                                 if q != k
                             )
