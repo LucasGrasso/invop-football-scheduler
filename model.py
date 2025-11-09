@@ -207,16 +207,18 @@ class FootballSchedulerModel:
         # Top-teams constraints
         for i in [x for x in range(self.N) if x not in self.I_s]:
             for k in range(self.K - 1):
-                for j in self.I_s:
-                    # (5) - No non-top team be required to play against any of the top teams in consecutive matches.
-                    self.__model.addCons(
+                # (5) - No non-top team be required to play against any of the top teams in consecutive matches.
+                self.__model.addCons(
+                    quicksum(
                         self.x[i, j, k]
                         + self.x[j, i, k]
                         + self.x[i, j, k + 1]
                         + self.x[j, i, k + 1]
-                        <= 1,
-                        name=f"top_team_cons_{i}_{j}_{k}",
+                        for j in self.I_s
                     )
+                    <= 1,
+                    name=f"top_team_cons_{i}_{k}",
+                )
 
     def __instance_balance_constraints(self):
         # Balance constraints
@@ -406,9 +408,9 @@ class FootballSchedulerModel:
         self.__model.optimize()
         self.__ensure_status("optimal")
 
-    def get_obj_value(self) -> float:
+    def get_obj_value(self) -> int:
         self.__ensure_status("optimal")
-        return self.__model.getObjVal()
+        return int(self.__model.getObjVal())
 
     def get_best_sol(self) -> Solution:
         self.__ensure_status("optimal")
