@@ -135,6 +135,7 @@ class FootballSchedulerModel:
                         - Aux Vars
                         - Symmetric scheme
         """
+        # b2b is uncompatible with double round robin constraints.
         if self.scheme != SymetricScheme.BACK_TO_BACK:
             self.__instance_double_round_robin_constraints()
         else:
@@ -143,8 +144,10 @@ class FootballSchedulerModel:
         # b2b is uncompatible with top_teams constraints.
         if len(self.I_s) > 0 and self.scheme != SymetricScheme.BACK_TO_BACK:
             self.__instance_top_teams_constraints()
-        self.__instance_balance_constraints()
-        self.__instance_aux_var_constraints()
+        # mirrored is uncompatible with most constraints.
+        if self.scheme != SymetricScheme.MIRRORED:
+            self.__instance_balance_constraints()
+            self.__instance_aux_var_constraints()
         self.__instance_symmetric_scheme_constraints()
 
     def __instance_double_round_robin_constraints(self):
